@@ -2,6 +2,14 @@ import numpy as np
 from dipy.align.metrics import CCMetric, EMMetric, SSDMetric
 from dipy.align.imwarp import SymmetricDiffeomorphicRegistration
 
+from dipy.align.imaffine import (transform_centers_of_mass,
+                                 AffineMap,
+                                 MutualInformationMetric,
+                                 AffineRegistration)
+from dipy.align.transforms import (TranslationTransform3D,
+                                   RigidTransform3D,
+                                   AffineTransform3D)
+
 metric_dict = {'CC': CCMetric,
                'EM': EMMetric,
                'SSD': SSDMetric}
@@ -45,3 +53,49 @@ def syn_registration(moving, static, moving_grid2world=None, static_grid2world=N
 
     warped_moving = mapping.transform(moving)
     return warped_moving, mapping
+
+def affine_registration(moving, static,
+                        moving_grid2world=None,
+                        static_grid2world=None,
+                        nbins = 32,
+                        sampling_prop = None,
+                        metric=MutualInformationMetric,
+                        level_iters = [10000, 1000, 100],
+                        sigmas = [3.0, 1.0, 0.0],
+                        factors = [4, 2, 1]):
+    """
+    Create an affine registration between a moving and a static image.
+    
+    """
+    # Initialize our registration class instance with the metric:
+    affreg = AffineRegistration(metric=metric(nbins, sampling_prop),
+                                level_iters=level_iters,
+                                sigmas=sigmas,
+                                factors=factors)
+    # Start by aligning centers of mass:
+    c_of_mass = transform_centers_of_mass(static, static_grid2world,
+                                          moving, moving_grid2world)
+
+    # Use that as a starting point to calculate a translation:
+    transform = TranslationTransform3D()
+    params0 = None
+    starting_affine = c_of_mass.affine
+    translation = affreg.optimize(static, moving, transform, params0,
+                                  static_grid2world, moving_grid2world,
+                                  starting_affine=starting_affine)
+
+    # Which is then used as a starting point for a rigid:
+    transform = RigidTransform3D()
+    params0 = None
+    starting_affine = translation.affine
+    rigid = affreg.optimize(static, moving, transform, params0,
+                            static_grid2world, moving_grid2world,
+                            starting_affine=starting_affine)
+
+    # Finally used as  staring point for the affine:
+    transform = AffineTransform3D()
+    params0 = None
+    starting_affine = rigid.affine
+    affine = affreg.optimize(static, moving, transform, params0,
+                             static_grid2world, moving_grid2world,
+                             starting_affine=starting_affine)
