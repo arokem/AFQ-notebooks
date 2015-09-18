@@ -18,7 +18,12 @@ syn_metric_dict = {'CC': CCMetric,
 def syn_registration(moving, static,
                      moving_grid2world=None,
                      static_grid2world=None,
-                     metric='CC', dim=3, level_iters = [10, 10, 5], prealign=None):
+                     step_length=0.25,
+                     metric='CC',
+                     dim=3,
+                     level_iters=[10, 10, 5],
+                     sigma_diff=2.0,
+                     prealign=None):
     """
     Register a source image (moving) to a target image (static)
     Parameters
@@ -48,9 +53,10 @@ def syn_registration(moving, static,
     backward : ndarray (..., 3)
         The vector field describing the backward warping from the target to the source
     """
-    use_metric = syn_metric_dict[metric](dim)
+    use_metric = syn_metric_dict[metric](dim, sigma_diff=sigma_diff)
 
-    sdr = SymmetricDiffeomorphicRegistration(use_metric, level_iters)
+    sdr = SymmetricDiffeomorphicRegistration(use_metric, level_iters,
+                                            step_length=step_length)
     mapping = sdr.optimize(static, moving,
                            static_grid2world=static_grid2world,
                            moving_grid2world=moving_grid2world,
